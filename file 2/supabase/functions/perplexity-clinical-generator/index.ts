@@ -12,7 +12,17 @@ serve(async (req) => {
   }
 
   try {
-    const { type, prompt, difficulty = 'intermediate', specialty = 'general' } = await req.json()
+    const { 
+      type, 
+      prompt, 
+      difficulty = 'intermediate', 
+      specialty = 'general',
+      age,
+      gender,
+      diagnosis,
+      chiefComplaint,
+      medicalHistory
+    } = await req.json()
 
     // Get Perplexity API key from secrets
     const perplexityApiKey = Deno.env.get('PERPLEXITY_API_KEY')
@@ -27,7 +37,41 @@ serve(async (req) => {
     switch (type) {
       case 'case':
         systemPrompt = `You are an expert clinical educator creating realistic medical cases for healthcare professionals. Generate comprehensive, evidence-based clinical cases with accurate medical information, proper diagnostic workup, and appropriate treatment plans. Include relevant vital signs, lab values, imaging results, and clinical reasoning.`
-        userPrompt = `Create a ${difficulty} level clinical case for ${specialty} practice. ${prompt}
+        
+        // Check if custom demographic/medical fields are provided
+        if (age || gender || diagnosis || chiefComplaint || medicalHistory) {
+          // Build custom case prompt using ALL provided fields
+          let customDetails = [];
+          
+          if (age) customDetails.push(`Age: ${age}`);
+          if (gender) customDetails.push(`Gender: ${gender}`);
+          if (diagnosis) customDetails.push(`Diagnosis: ${diagnosis}`);
+          if (chiefComplaint) customDetails.push(`Chief Complaint: ${chiefComplaint}`);
+          if (medicalHistory) customDetails.push(`Medical History: ${medicalHistory}`);
+          
+          userPrompt = `Create a ${difficulty} level clinical case for ${specialty} practice based on the following patient details:
+
+${customDetails.join('\n')}
+
+${prompt ? `Additional instructions: ${prompt}\n\n` : ''}
+Please include:
+1. Patient demographics (use the provided age: ${age || 'appropriate age'} and gender: ${gender || 'appropriate gender'})
+2. Chief complaint (expand on: ${chiefComplaint || 'relevant complaint'})
+3. History of present illness with timeline
+4. Past medical history (incorporate: ${medicalHistory || 'relevant history'})
+5. Current medications and allergies
+6. Physical examination findings
+7. Vital signs (realistic values for age ${age || 'adult'})
+8. Laboratory results and imaging (if applicable for ${diagnosis || 'the condition'})
+9. Assessment and differential diagnosis (centered around ${diagnosis || 'the primary diagnosis'})
+10. Treatment plan with evidence-based rationale
+11. Follow-up recommendations
+12. Learning objectives
+
+Make it realistic and clinically accurate with proper medical terminology. Ensure ALL the provided patient details (age, gender, diagnosis, chief complaint, medical history) are fully integrated into the case presentation.`
+        } else {
+          // Use standard prompt when no custom fields provided
+          userPrompt = `Create a ${difficulty} level clinical case for ${specialty} practice. ${prompt}
 
 Please include:
 1. Patient demographics and chief complaint
@@ -42,12 +86,12 @@ Please include:
 10. Learning objectives
 
 Make it realistic and clinically accurate with proper medical terminology.`
+        }
         break
 
       case 'soap':
         systemPrompt = `You are a clinical documentation expert. Create professional, comprehensive SOAP notes that follow proper medical documentation standards. Include detailed subjective and objective findings, thorough assessment with clinical reasoning, and evidence-based treatment plans.`
         userPrompt = `Generate a detailed SOAP note for: ${prompt}
-
 Difficulty level: ${difficulty}
 Specialty: ${specialty}
 
@@ -63,7 +107,6 @@ Use proper medical terminology and evidence-based recommendations.`
       case 'assessment':
         systemPrompt = `You are a medical education specialist creating clinical assessments. Generate challenging, evidence-based questions that test clinical reasoning, diagnostic skills, and treatment knowledge. Include detailed explanations with current medical guidelines and research.`
         userPrompt = `Create a clinical assessment question about: ${prompt}
-
 Difficulty: ${difficulty}
 Specialty: ${specialty}
 
@@ -192,7 +235,6 @@ Focus on clinically relevant, evidence-based information.`
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       },
     )
-
   } catch (error) {
     console.error('Error:', error)
     return new Response(
